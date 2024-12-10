@@ -81,3 +81,35 @@ def products():
         "average_sales_price": average_sales_price,
         "products_by_sector": products_by_sector,
     }
+
+
+@app.get("/products/{name_product}")
+def product_details(name_product: str) -> Dict[str, Any]:
+    total_revenue = 0
+    total_sold = 0
+    sales_prices = []
+
+    for record in records:
+        fields = record.get("fields", {})
+        deal_stage = fields.get("deal_stage", "")
+        product_name = fields.get("product (from product)", [None])[0]
+
+        # Vérifier si le produit correspond au nom recherché et qu'il a été vendu
+        if product_name == name_product and deal_stage == "Won":
+            total_revenue += fields.get("close_value", 0)
+            total_sold += 1
+            sales_price = fields.get("close_value", 0)
+            sales_prices.append(sales_price)
+
+    # Calculer le prix moyen de vente
+    average_sales_price = (
+        sum(sales_prices) / len(sales_prices) if sales_prices else 0
+    )
+
+    # Préparer la réponse
+    return {
+        "product_name": name_product,
+        "total_revenue": total_revenue,
+        "total_sold": total_sold,
+        "average_sales_price": average_sales_price,
+    }
