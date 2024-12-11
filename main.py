@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Any
 from fastapi import FastAPI
 from collections import defaultdict
 import requests
@@ -30,9 +30,6 @@ else:
     print(f"Failed to retrieve records: {response.status_code}")
     print(response.json())
 
-
-from typing import Dict, List, Any
-from fastapi import FastAPI
 
 app = FastAPI()
 
@@ -202,7 +199,6 @@ def products():
     }
 
 
-
 @app.get("/products/{name_product}")
 def product_details(name_product: str):
     # Préparer les données
@@ -211,7 +207,9 @@ def product_details(name_product: str):
     sales_prices: Dict[int] = []
     times_to_sell: Dict[int] = []
     seller_sales = {}
+    seller_revenue = {}
     sector_sales = {}
+    sector_revenue = {}
     monthly_stats = {}
 
     # Parcourir les enregistrements
@@ -220,9 +218,9 @@ def product_details(name_product: str):
         deal_stage = fields.get("deal_stage", "")
         product_name = fields.get("product (from product)", [None])[0]
         close_value = fields.get("close_value", 0)
-        sales_agent = fields.get("sales_agent", "Unknown")
+        sales_agent = fields.get("sales_agent (from sales_agent)", "Unknown")
         sector = fields.get("sector (from account)", "Unknown")
-        account = fields.get("account", "Unknown")
+        account = fields.get("account (from account)", "Unknown")
         engage_date = fields.get("engage_date", None)
         close_date = fields.get("close_date", None)
 
@@ -247,15 +245,19 @@ def product_details(name_product: str):
             if engage_date and close_date:
                 times_to_sell.append((close_date - engage_date).days)
 
-            # Compter les ventes par vendeur
+            # Compter les ventes et chiffre d'affaires par vendeur
             if sales_agent not in seller_sales:
                 seller_sales[sales_agent] = 0
+                seller_revenue[sales_agent] = 0
             seller_sales[sales_agent] += 1
+            seller_revenue[sales_agent] += close_value
 
-            # Compter les ventes par secteur
+            # Compter les ventes et chiffre d'affaires par secteur
             if sector not in sector_sales:
                 sector_sales[sector] = 0
+                sector_revenue[sector] = 0
             sector_sales[sector] += 1
+            sector_revenue[sector] += close_value
 
             # Ajouter aux statistiques mensuelles
             if close_date:
@@ -292,8 +294,22 @@ def product_details(name_product: str):
     max_sales_price = max(sales_prices) if sales_prices else 0
     min_sales_price = min(sales_prices) if sales_prices else 0
     average_time_to_sell = sum(times_to_sell) / len(times_to_sell) if times_to_sell else 0
+
+    # Trouver le top vendeur avec ventes et chiffre d'affaires
     top_seller = max(seller_sales, key=seller_sales.get) if seller_sales else None
+    top_seller_stats = {
+        "name": top_seller,
+        "sales_count": seller_sales[top_seller],
+        "revenue": seller_revenue[top_seller],
+    } if top_seller else None
+
+    # Trouver le top secteur avec ventes et chiffre d'affaires
     top_sector = max(sector_sales, key=sector_sales.get) if sector_sales else None
+    top_sector_stats = {
+        "name": top_sector,
+        "sales_count": sector_sales[top_sector],
+        "revenue": sector_revenue[top_sector],
+    } if top_sector else None
 
     # Calculer les statistiques mensuelles
     for month, stats in monthly_stats.items():
@@ -309,55 +325,204 @@ def product_details(name_product: str):
         "max_sales_price": max_sales_price,
         "min_sales_price": min_sales_price,
         "average_time_to_sell": average_time_to_sell,
-        "top_seller": top_seller,
-        "top_sector": top_sector,
+        "top_seller_stats": top_seller_stats,
+        "top_sector_stats": top_sector_stats,
         "monthly_stats": monthly_stats,
     }
 
-# @app.get("/sales_agents")
-# def sales_agents_performance() -> Dict[str, Any]:
-#     performance = defaultdict(lambda: {
-#         "total_revenue": 0,
-#         "sales_count": 0,
-#         "average_sales_price": 0,
-#         "sectors": defaultdict(int),
-#         "clients": set()
-#     })
+@app.get("/sales_agents")
+def sales_agents_performance() -> Dict[str, Any]:
+    performance = defaultdict(lambda: {
+        "total_revenue": 0,
+        "sales_count": 0,
+        "average_sales_price": 0,
+        "sectors": defaultdict(int),
+        "clients": set(),
+        "regions": defaultdict(lambda: {
+            "sales_count": 0,
+            "total_revenue": 0,
+            "times_to_sell": []
+        }),
+        "times_to_sell": []
+    })
 
-#     for record in records:
-#         fields = record.get("fields", {})
-#         deal_stage = fields.get("deal_stage", "")
-#         sales_agent = fields.get("sales_agent (from sales_agent)", [None])[0]
-#         sector = fields.get("sector (from account)", "Unknown")
-#         close_value = fields.get("close_value", 0)
-#         account = fields.get("account (from account)", [None])[0]
+    managers_revenue = defaultdict(int)
+    client_revenue = defaultdict(int)
 
-#         if isinstance(sector, list):
-#             sector = sector[0]
+    for record in records:
+        fields = record.get("fields", {})
+        deal_stage = fields.get("deal_stage", "")
+        sales_agent = fields.get("sales_agent (from sales_agent)", [None])[0]
+        manager = fields.get("manager (from sales_agent)", "Unknown")
+        sector = fields.get("sector (from account)", "Unknown")
+        region = fields.get("regional_office (from sales_agent)", "Unknown")
+        close_value = fields.get("close_value", 0)
+        account = fields.get("account (from account)", [None])[0]
+        engage_date = fields.get("engage_date", None)
+        close_date = fields.get("close_date", None)
 
-#         # Si l'affaire est gagnée
-#         if deal_stage == "Won" and sales_agent:
-#             performance[sales_agent]["total_revenue"] += close_value
-#             performance[sales_agent]["sales_count"] += 1
-#             performance[sales_agent]["sectors"][sector] += 1
-#             performance[sales_agent]["clients"].add(account)
+        if isinstance(sector, list):
+            sector = sector[0]
+        if isinstance(region, list):
+            region = region[0]
 
-#     # Calcul des moyennes et transformation des sets en listes
-#     for agent, stats in performance.items():
-#         if stats["sales_count"] > 0:
-#             stats["average_sales_price"] = stats["total_revenue"] / stats["sales_count"]
-#         stats["clients"] = list(stats["clients"])
+        if engage_date and close_date:
+            engage_date = datetime.strptime(engage_date, "%Y-%m-%d")
+            close_date = datetime.strptime(close_date, "%Y-%m-%d")
+            time_to_sell = (close_date - engage_date).days
+        else:
+            time_to_sell = None
 
-#     ranking = sorted(
-#         performance.items(),
-#         key=lambda item: item[1]["sales_count"],
-#         reverse=True
-#     )
+        # Si l'affaire est gagnée
+        if deal_stage == "Won" and sales_agent:
+            performance[sales_agent]["total_revenue"] += close_value
+            performance[sales_agent]["sales_count"] += 1
+            performance[sales_agent]["sectors"][sector] += 1
+            performance[sales_agent]["clients"].add(account)
 
-#     return {
-#         "sales_agents_performance": performance,
-#         "ranking": [
-#             {"sales_agent": agent, "sales_count": stats["sales_count"]}
-#             for agent, stats in ranking
-#         ]
-#     }
+            # Par région
+            performance[sales_agent]["regions"][region]["sales_count"] += 1
+            performance[sales_agent]["regions"][region]["total_revenue"] += close_value
+            
+            if time_to_sell is not None:
+                performance[sales_agent]["regions"][region]["times_to_sell"].append(time_to_sell)
+                performance[sales_agent]["times_to_sell"].append(time_to_sell)
+
+            # Chiffre d'affaires des managers
+            managers_revenue[manager[0] if isinstance(manager, list) else manager] += close_value
+
+            # Revenu des clients
+            client_revenue[account] += close_value
+
+    # Calcul des moyennes et transformation des sets en listes
+    for agent, stats in performance.items():
+        if stats["sales_count"] > 0:
+            stats["average_sales_price"] = stats["total_revenue"] / stats["sales_count"]
+        if stats["times_to_sell"]:
+            stats["average_time_to_sell"] = sum(stats["times_to_sell"]) / len(stats["times_to_sell"])
+        else:
+            stats["average_time_to_sell"] = None
+        stats["clients"] = list(stats["clients"])
+
+        # Calcul par région
+        for region, region_stats in stats["regions"].items():
+            if region_stats["times_to_sell"]:
+                region_stats["average_time_to_sell"] = sum(region_stats["times_to_sell"]) / len(region_stats["times_to_sell"])
+            else:
+                region_stats["average_time_to_sell"] = None
+
+    ranking = sorted(
+        performance.items(),
+        key=lambda item: item[1]["sales_count"],
+        reverse=True
+    )
+
+    return {
+        "sales_agents_performance": performance,
+        "ranking": [
+            {"sales_agent": agent, "sales_count": stats["sales_count"]}
+            for agent, stats in ranking
+        ],
+        "managers_revenue": managers_revenue,
+        "client_revenue": {
+            client: revenue / (performance[sales_agent]["clients"].count(client) if performance[sales_agent]["clients"].count(client) > 0 else 1)
+            for client, revenue in client_revenue.items()
+        }
+    }
+
+@app.get("/sales_agent/{name_agent}")
+def sales_agent_details(name_agent: str):
+    # Préparer les données
+    agent_records = [
+    record for record in records
+    if record.get("fields", {}).get("sales_agent (from sales_agent)", [None])[0] == name_agent
+    ]
+
+    if not agent_records:
+        return {"error": f"No records found for sales agent: {name_agent}"}
+
+    total_sales = 0
+    total_revenue = 0
+    sales_prices = []
+    time_to_sell = []
+    product_sales = {}
+    sector_sales = {}
+    opportunities = {"Won": 0, "Lost": 0, "In Progress": 0}
+
+    for record in agent_records:
+        fields = record.get("fields", {})
+        product_name = fields.get("product (from product)", [None])[0]
+        sector = fields.get("sector (from account)", "Unknown")
+        close_value = fields.get("close_value", 0)
+        deal_stage = fields.get("deal_stage", "Unknown")
+        engage_date = fields.get("engage_date", None)
+        close_date = fields.get("close_date", None)
+
+        if isinstance(sector, list):
+            sector = sector[0]
+
+        if isinstance(engage_date, str):
+            engage_date = datetime.strptime(engage_date, "%Y-%m-%d")
+        if isinstance(close_date, str):
+            close_date = datetime.strptime(close_date, "%Y-%m-%d")
+
+        if close_value > 0 and deal_stage == "Won":
+            total_sales += 1
+            total_revenue += close_value
+            sales_prices.append(close_value)
+            if engage_date and close_date:
+                time_to_sell.append((close_date - engage_date).days)
+
+            # Compter les ventes par produit
+            if product_name not in product_sales:
+                product_sales[product_name] = {"count": 0, "revenue": 0}
+            product_sales[product_name]["count"] += 1
+            product_sales[product_name]["revenue"] += close_value
+
+            # Compter les ventes par secteur
+            if sector not in sector_sales:
+                sector_sales[sector] = {"count": 0, "revenue": 0}
+            sector_sales[sector]["count"] += 1
+            sector_sales[sector]["revenue"] += close_value
+
+        # Compter les opportunités
+        if deal_stage in opportunities:
+            opportunities[deal_stage] += 1
+
+    # Calculer les statistiques
+    average_sales_price = sum(sales_prices) / len(sales_prices) if sales_prices else 0
+    average_time_to_sell = sum(time_to_sell) / len(time_to_sell) if time_to_sell else 0
+
+    # Top 3 produits
+    top_products = sorted(
+        product_sales.items(),
+        key=lambda x: x[1]["count"],
+        reverse=True
+    )[:3]
+    top_products = [
+        {"name": product, "rank": rank + 1, "average_price": product_sales[product]["revenue"] / product_sales[product]["count"]}
+        for rank, (product, data) in enumerate(top_products)
+    ]
+
+    # Top 3 secteurs
+    top_sectors = sorted(
+        sector_sales.items(),
+        key=lambda x: x[1]["count"],
+        reverse=True
+    )[:3]
+    top_sectors = [
+        {"name": sector, "rank": rank + 1, "average_price": sector_sales[sector]["revenue"] / sector_sales[sector]["count"]}
+        for rank, (sector, data) in enumerate(top_sectors)
+    ]
+
+    # Préparer la réponse
+    return {
+        "sales_agent": name_agent,
+        "total_sales": total_sales,
+        "average_sales_price": average_sales_price,
+        "top_products": top_products,
+        "top_sectors": top_sectors,
+        "total_revenue": total_revenue,
+        "opportunities": opportunities,
+        "average_time_to_sell": average_time_to_sell,
+    }
