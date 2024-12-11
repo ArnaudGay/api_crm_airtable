@@ -1,0 +1,109 @@
+import streamlit as st
+import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Define FastAPI endpoints URL
+API_BASE_URL = "http://localhost:8000"  # Make sure your FastAPI is running at this URL
+
+# Function to fetch data from FastAPI
+def fetch_data(endpoint: str, params: dict = None):
+    response = requests.get(f"{API_BASE_URL}/{endpoint}", params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        st.error(f"Failed to fetch data: {response.status_code}")
+        return {}
+
+# Streamlit App
+
+# Title of the app
+st.title("Sales Pipeline Dashboard")
+
+# Sidebar for navigation
+st.sidebar.title("Navigation")
+option = st.sidebar.selectbox(
+    "Select a dashboard to view",
+    ["Overview", "Product KPIs", "Specific Product KPIs"]
+)
+
+# Show overview dashboard
+if option == "Overview":
+    st.header("Sales Overview")
+    data = fetch_data("products")
+    if data:
+        st.write("**Total Revenue**: ", data.get("total_revenue", 0))
+        st.write("**Sold Products Count**: ", data.get("sold_products_count", 0))
+        st.write("**Average Sales Price**: ", data.get("average_sales_price", 0))
+        st.write("**Top Products by Sector**: ", data.get("top_products_by_sector", {}))
+        st.write("**Top Products by Region**: ", data.get("top_products_by_region", {}))
+
+        # Plot revenue by sector
+        sector_revenue = data.get("sector_revenue", {})
+        sectors = list(sector_revenue.keys())
+        revenues = list(sector_revenue.values())
+        fig, ax = plt.subplots()
+        sns.barplot(x=sectors, y=revenues, ax=ax)
+        ax.set_title('Revenue by Sector')
+        ax.set_ylabel('Revenue')
+        st.pyplot(fig)
+
+        # Plot top sectors by sales
+        top_sectors = data.get("top_sectors_by_sales", [])
+        sectors = [sector for sector, _ in top_sectors]
+        sales_count = [sales for _, sales in top_sectors]
+        fig, ax = plt.subplots()
+        sns.barplot(x=sectors, y=sales_count, ax=ax)
+        ax.set_title('Top Sectors by Sales')
+        ax.set_ylabel('Number of Sales')
+        st.pyplot(fig)
+
+# Show product KPIs
+elif option == "Product KPIs":
+    st.header("Product KPIs")
+    product_name = st.text_input("Enter Product Name:")
+    if product_name:
+        data = fetch_data(f"products/{product_name}")
+        if data:
+            st.write("**Total Revenue**: ", data.get("total_revenue", 0))
+            st.write("**Total Sold**: ", data.get("total_sold", 0))
+            st.write("**Average Sales Price**: ", data.get("average_sales_price", 0))
+            st.write("**Max Sales Price**: ", data.get("max_sales_price", 0))
+            st.write("**Min Sales Price**: ", data.get("min_sales_price", 0))
+            st.write("**Average Time to Sell (days)**: ", data.get("average_time_to_sell", 0))
+            st.write("**Top Seller**: ", data.get("top_seller", "N/A"))
+            st.write("**Top Sector**: ", data.get("top_sector", "N/A"))
+            st.write("**Monthly Stats**: ", data.get("monthly_stats", {}))
+
+            # Display monthly stats table
+            monthly_stats = data.get("monthly_stats", {})
+            if monthly_stats:
+                df = pd.DataFrame.from_dict(monthly_stats, orient="index")
+                st.write(df)
+
+# Show specific product KPIs
+elif option == "Specific Product KPIs":
+    st.header("Specific Product KPIs")
+    product_name = st.text_input("Enter Product Name:")
+    if product_name:
+        data = fetch_data(f"products/{product_name}")
+        if data:
+            st.write("**Total Revenue**: ", data.get("total_revenue", 0))
+            st.write("**Total Sold**: ", data.get("total_sold", 0))
+            st.write("**Average Sales Price**: ", data.get("average_sales_price", 0))
+            st.write("**Max Sales Price**: ", data.get("max_sales_price", 0))
+            st.write("**Min Sales Price**: ", data.get("min_sales_price", 0))
+            st.write("**Average Time to Sell**: ", data.get("average_time_to_sell", 0))
+            st.write("**Top Seller**: ", data.get("top_seller", "N/A"))
+            st.write("**Top Sector**: ", data.get("top_sector", "N/A"))
+
+            # Display top sellers by product
+            seller_sales = data.get("seller_sales", {})
+            sellers = list(seller_sales.keys())
+            sales_counts = list(seller_sales.values())
+            fig, ax = plt.subplots()
+            sns.barplot(x=sellers, y=sales_counts, ax=ax)
+            ax.set_title('Top Sellers for Product')
+            ax.set_ylabel('Number of Sales')
+            st.pyplot(fig)
