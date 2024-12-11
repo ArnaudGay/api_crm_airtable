@@ -1,109 +1,184 @@
 import streamlit as st
-import requests
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 
-# Define FastAPI endpoints URL
-API_BASE_URL = "http://localhost:8000"  # Make sure your FastAPI is running at this URL
+# Configure the page layout
+st.set_page_config(page_title="Sales Dashboard", page_icon="📊", layout="wide")
 
-# Function to fetch data from FastAPI
-def fetch_data(endpoint: str, params: dict = None):
-    response = requests.get(f"{API_BASE_URL}/{endpoint}", params=params)
-    if response.status_code == 200:
-        return response.json()
+# Custom CSS for styling the page
+st.markdown("""
+    <style>
+        /* Background Color for the entire page */
+        body {
+            background-color: #2e2e2e;
+            color: #f1f1f1;
+        }
+
+        /* Title and Subheader Styling */
+        .css-18e3th9 {
+            font-size: 36px;
+            font-weight: bold;
+            color: #FFD700;
+        }
+
+        .css-14xtw13 {
+            font-size: 28px;
+            font-weight: bold;
+            color: #D3D3D3;
+        }
+
+        .css-1g3m7b0 {
+            font-size: 20px;
+            color: #B0C4DE;
+        }
+
+        /* Card Styling for each section */
+        .stCard {
+            background-color: #3e3e3e;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Stylizing the Sidebar */
+        .css-1d391kg {
+            background-color: #333333;
+            color: #f1f1f1;
+        }
+
+        /* Make graphs more elegant */
+        .matplotlib {
+            background-color: #2e2e2e;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Buttons */
+        .css-1v0mbdj {
+            background-color: #FFD700;
+            color: #333333;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        /* Stylish borders for text input */
+        .stTextInput > div {
+            background-color: #3e3e3e;
+            border-radius: 10px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+
+# Function to generate fake data for the sake of testing
+def generate_fake_data():
+    # Example Data for general sales and agent sales
+    products = ['Laptop', 'Smartphone', 'Tablet', 'Headphones', 'Monitor']
+    agents = ['Alice', 'Bob', 'Charlie', 'David', 'Eve']
+
+    # Data Generation
+    data = {
+        'total_revenue': np.random.randint(50000, 300000),
+        'total_sold_products': np.random.randint(500, 3000),
+        'average_sales_price': np.random.randint(100, 2000),
+        'products_revenue': {product: np.random.randint(10000, 50000) for product in products},
+        'products_sales': {product: np.random.randint(100, 1000) for product in products},
+        'agent_sales': {agent: np.random.randint(50, 200) for agent in agents},
+        'agent_revenue': {agent: np.random.randint(5000, 50000) for agent in agents},
+        'monthly_stats': {f'2024-{str(month).zfill(2)}': {'sales': np.random.randint(100, 500),
+                                                          'revenue': np.random.randint(5000, 20000)} for month in
+                          range(1, 13)}
+    }
+    return data
+
+
+# Fetching data from the mock function (simulate API or DB calls)
+def fetch_data(endpoint: str):
+    return generate_fake_data()
+
+
+# Function to plot bar charts
+def plot_bar_chart(x, y, title, x_label, y_label):
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(x=x, y=y, ax=ax, palette="coolwarm")
+    ax.set_title(title, fontsize=16, color="#FFD700")
+    ax.set_xlabel(x_label, fontsize=14)
+    ax.set_ylabel(y_label, fontsize=14)
+    plt.xticks(rotation=45, ha="right")
+    st.pyplot(fig)
+
+
+# Page 1: General Sales & Products
+def page_sales_products():
+    st.title("General Sales Overview")
+    data = fetch_data("general_sales")
+
+    # Filter by product
+    product_filter = st.selectbox("Select a Product", list(data['products_revenue'].keys()) + ["All Products"])
+
+    if product_filter != "All Products":
+        revenue = {product_filter: data['products_revenue'][product_filter]}
+        sales = {product_filter: data['products_sales'][product_filter]}
+        plot_bar_chart([product_filter], list(revenue.values()), "Revenue by Selected Product", "Product",
+                       "Revenue ($)")
+        plot_bar_chart([product_filter], list(sales.values()), "Sales by Selected Product", "Product", "Sales (Units)")
     else:
-        st.error(f"Failed to fetch data: {response.status_code}")
-        return {}
+        product_names = list(data['products_revenue'].keys())
+        revenues = list(data['products_revenue'].values())
+        plot_bar_chart(product_names, revenues, "Revenue by Product", "Product", "Revenue ($)")
 
-# Streamlit App
+        sales = list(data['products_sales'].values())
+        plot_bar_chart(product_names, sales, "Sales by Product", "Product", "Sales (Units)")
 
-# Title of the app
-st.title("Sales Pipeline Dashboard")
+    # Display general data
+    st.subheader("Overall Sales Data")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.write(f"**Total Revenue**: ${data['total_revenue']:,}")
+    with col2:
+        st.write(f"**Total Products Sold**: {data['total_sold_products']}")
+    with col3:
+        st.write(f"**Average Sales Price**: ${data['average_sales_price']:,}")
 
-# Sidebar for navigation
-st.sidebar.title("Navigation")
-option = st.sidebar.selectbox(
-    "Select a dashboard to view",
-    ["Overview", "Product KPIs", "Specific Product KPIs"]
-)
 
-# Show overview dashboard
-if option == "Overview":
-    st.header("Sales Overview")
-    data = fetch_data("products")
-    if data:
-        st.write("**Total Revenue**: ", data.get("total_revenue", 0))
-        st.write("**Sold Products Count**: ", data.get("sold_products_count", 0))
-        st.write("**Average Sales Price**: ", data.get("average_sales_price", 0))
-        st.write("**Top Products by Sector**: ", data.get("top_products_by_sector", {}))
-        st.write("**Top Products by Region**: ", data.get("top_products_by_region", {}))
+# Page 2: Sales by Agents
+def page_sales_agents():
+    st.title("Sales by Agents")
+    data = fetch_data("agent_sales")
 
-        # Plot revenue by sector
-        sector_revenue = data.get("sector_revenue", {})
-        sectors = list(sector_revenue.keys())
-        revenues = list(sector_revenue.values())
-        fig, ax = plt.subplots()
-        sns.barplot(x=sectors, y=revenues, ax=ax)
-        ax.set_title('Revenue by Sector')
-        ax.set_ylabel('Revenue')
-        st.pyplot(fig)
+    # Filter by agent
+    agent_filter = st.selectbox("Select an Agent", list(data['agent_sales'].keys()) + ["All Agents"])
 
-        # Plot top sectors by sales
-        top_sectors = data.get("top_sectors_by_sales", [])
-        sectors = [sector for sector, _ in top_sectors]
-        sales_count = [sales for _, sales in top_sectors]
-        fig, ax = plt.subplots()
-        sns.barplot(x=sectors, y=sales_count, ax=ax)
-        ax.set_title('Top Sectors by Sales')
-        ax.set_ylabel('Number of Sales')
-        st.pyplot(fig)
+    if agent_filter != "All Agents":
+        agent_sales = {agent_filter: data['agent_sales'][agent_filter]}
+        agent_revenue = {agent_filter: data['agent_revenue'][agent_filter]}
+        plot_bar_chart([agent_filter], list(agent_sales.values()), "Sales by Selected Agent", "Agent", "Sales (Units)")
+        plot_bar_chart([agent_filter], list(agent_revenue.values()), "Revenue by Selected Agent", "Agent",
+                       "Revenue ($)")
+    else:
+        agent_names = list(data['agent_sales'].keys())
+        sales = list(data['agent_sales'].values())
+        plot_bar_chart(agent_names, sales, "Sales by Agent", "Agent", "Sales (Units)")
 
-# Show product KPIs
-elif option == "Product KPIs":
-    st.header("Product KPIs")
-    product_name = st.text_input("Enter Product Name:")
-    if product_name:
-        data = fetch_data(f"products/{product_name}")
-        if data:
-            st.write("**Total Revenue**: ", data.get("total_revenue", 0))
-            st.write("**Total Sold**: ", data.get("total_sold", 0))
-            st.write("**Average Sales Price**: ", data.get("average_sales_price", 0))
-            st.write("**Max Sales Price**: ", data.get("max_sales_price", 0))
-            st.write("**Min Sales Price**: ", data.get("min_sales_price", 0))
-            st.write("**Average Time to Sell (days)**: ", data.get("average_time_to_sell", 0))
-            st.write("**Top Seller**: ", data.get("top_seller", "N/A"))
-            st.write("**Top Sector**: ", data.get("top_sector", "N/A"))
-            st.write("**Monthly Stats**: ", data.get("monthly_stats", {}))
+        revenue = list(data['agent_revenue'].values())
+        plot_bar_chart(agent_names, revenue, "Revenue by Agent", "Agent", "Revenue ($)")
 
-            # Display monthly stats table
-            monthly_stats = data.get("monthly_stats", {})
-            if monthly_stats:
-                df = pd.DataFrame.from_dict(monthly_stats, orient="index")
-                st.write(df)
+    # Display monthly stats
+    st.subheader("Monthly Sales Stats")
+    monthly_stats = data['monthly_stats']
+    if monthly_stats:
+        df = pd.DataFrame.from_dict(monthly_stats, orient="index")
+        st.write(df)
 
-# Show specific product KPIs
-elif option == "Specific Product KPIs":
-    st.header("Specific Product KPIs")
-    product_name = st.text_input("Enter Product Name:")
-    if product_name:
-        data = fetch_data(f"products/{product_name}")
-        if data:
-            st.write("**Total Revenue**: ", data.get("total_revenue", 0))
-            st.write("**Total Sold**: ", data.get("total_sold", 0))
-            st.write("**Average Sales Price**: ", data.get("average_sales_price", 0))
-            st.write("**Max Sales Price**: ", data.get("max_sales_price", 0))
-            st.write("**Min Sales Price**: ", data.get("min_sales_price", 0))
-            st.write("**Average Time to Sell**: ", data.get("average_time_to_sell", 0))
-            st.write("**Top Seller**: ", data.get("top_seller", "N/A"))
-            st.write("**Top Sector**: ", data.get("top_sector", "N/A"))
 
-            # Display top sellers by product
-            seller_sales = data.get("seller_sales", {})
-            sellers = list(seller_sales.keys())
-            sales_counts = list(seller_sales.values())
-            fig, ax = plt.subplots()
-            sns.barplot(x=sellers, y=sales_counts, ax=ax)
-            ax.set_title('Top Sellers for Product')
-            ax.set_ylabel('Number of Sales')
-            st.pyplot(fig)
+# Define the pages for navigation
+page = st.sidebar.selectbox("Select a page", ["General Sales & Products", "Sales by Agents"])
+
+if page == "General Sales & Products":
+    page_sales_products()
+elif page == "Sales by Agents":
+    page_sales_agents()
