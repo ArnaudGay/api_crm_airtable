@@ -430,7 +430,7 @@ def sales_agents_performance() -> Dict[str, Any]:
         }
     }
 
-@app.get("/sales_agent/{name_agent}")
+@app.get("/sales_agents/{name_agent}")
 def sales_agent_details(name_agent: str):
     # Préparer les données
     agent_records = [
