@@ -526,3 +526,89 @@ def sales_agent_details(name_agent: str):
         "opportunities": opportunities,
         "average_time_to_sell": average_time_to_sell,
     }
+
+@app.get("/values")
+def get_values():
+    # Préparer les listes uniques
+    products = set()
+    clients = set()
+    sectors = set()
+    sellers = set()
+    managers = set()
+
+    for record in records:
+        fields = record.get("fields", {})
+        # Ajouter les éléments aux ensembles
+        product = fields.get("product (from product)", [None])[0]
+        client = fields.get("account (from account)", [None])[0]
+        sector = fields.get("sector (from account)", [None])[0]
+        seller = fields.get("sales_agent (from sales_agent)", [None])[0]
+        manager = fields.get("manager (from sales_agent)", [None])[0]
+
+        if product:
+            products.add(product)
+        if client:
+            clients.add(client)
+        if sector:
+            sectors.add(sector)
+        if seller:
+            sellers.add(seller)
+        if manager:
+            managers.add(manager)
+
+    # Convertir les ensembles en listes pour la réponse JSON
+    return {
+        "products": list(products),
+        "clients": list(clients),
+        "sectors": list(sectors),
+        "sellers": list(sellers),
+        "managers": list(managers),
+    }
+
+
+@app.get("/accounts")
+def get_accounts():
+    # Préparer les données des clients
+    client_revenues = {}
+    client_orders = {}
+    total_company_revenue = 0  # Revenu global de l'entreprise
+
+    for record in records:
+        fields = record.get("fields", {})
+        client = fields.get("account (from account)", [None])[0]
+        close_value = fields.get("close_value", 0)
+        revenue = fields.get("revenue (from account)", [0])[0]  # Extraire la première valeur de la liste
+
+        if client:
+            # Ajouter aux revenus totaux
+            if client not in client_revenues:
+                client_revenues[client] = 0
+                client_orders[client] = 0
+            client_revenues[client] += close_value
+            client_orders[client] += 1
+
+        # Additionner au revenu global de l'entreprise
+        total_company_revenue += revenue
+
+    # Calcul de la part de chaque client
+    client_revenue_shares = {
+        client: {
+            "percentage_of_total_revenue": f"{round((client_revenues[client] / total_company_revenue) * 100, 2)}%"
+            if total_company_revenue > 0 else "N/A"
+        }
+        for client in client_revenues
+    }
+
+    # Calcul du classement des clients par nombre de commandes
+    ranked_clients = sorted(client_orders.items(), key=lambda x: x[1], reverse=True)
+
+    # Préparer la réponse
+    return {
+        "client_revenues": client_revenues,
+        "ranked_clients": [
+            {"client": client, "orders": orders, "rank": rank + 1}
+            for rank, (client, orders) in enumerate(ranked_clients)
+        ],
+        "client_revenue_shares": client_revenue_shares,
+        "total_company_revenue": round(total_company_revenue, 2),
+    }
