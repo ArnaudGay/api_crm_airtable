@@ -3,3 +3,4 @@
 Instruction :
 - After saves main.py we can juste enter this command in your terminal :
 ```fastapi dev main.py```
+```streamlit run streamlit_app.py```

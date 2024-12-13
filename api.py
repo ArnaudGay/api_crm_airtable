@@ -1,8 +1,9 @@
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Union
 from fastapi import FastAPI
 from collections import defaultdict
 import requests
 from datetime import datetime
+from pydantic import BaseModel
 
 app = FastAPI()
 
@@ -30,10 +31,140 @@ else:
     print(f"Failed to retrieve records: {response.status_code}")
     print(response.json())
 
+# Init docs
+
+class RankedClient(BaseModel):
+    client: str
+    orders: int
+    rank: int
+
+class AccountClientShare(BaseModel):
+    total_revenue: float
+    percentage_of_total_revenue: str
+
+class NegotiatedProduct(BaseModel):
+    name: Optional[str]
+    negotiation_difference: float
+
+class TopProduct(BaseModel):
+    rank: int
+    product: str
+    sales: int
+
+class SectorDetails(BaseModel):
+    sector: str
+    sales: float
+
+class RegionDetails(BaseModel):
+    region: str
+    revenue: float
+
+class MonthlyStats(BaseModel):
+    number_of_sales: int
+    total_revenue: float
+    clients: Dict[str, int]
+    sales_by_seller: Dict[str, int]
+    sales_by_sector: Dict[str, int]
+    average_price: Optional[float] = None
+    top_client: Optional[str] = None
+
+class TopStats(BaseModel):
+    name: str
+    sales_count: int
+    revenue: float
+
+class RegionStats(BaseModel):
+    sales_count: int
+    total_revenue: float
+    average_time_to_sell: Optional[float] = None
+
+class SalesAgentPerformance(BaseModel):
+    total_revenue: float
+    sales_count: int
+    average_sales_price: float
+    sectors: Dict[str, int]
+    clients: List[str]
+    regions: Dict[str, RegionStats]
+    average_time_to_sell: Optional[float] = None
+
+class TopAgentProduct(BaseModel):
+    name: str
+    rank: int
+    average_price: float
+
+class TopSector(BaseModel):
+    name: str
+    rank: int
+    average_price: float
+
+class ProductRevenue(BaseModel):
+    name: Optional[str]
+    revenue: float
+
+# Endpoints
+
+class ProductResponse(BaseModel):
+    total_revenue: float
+    sold_products_count: int
+    average_sales_price: float
+    top_products_by_sector: Dict[str, List[TopProduct]]
+    sector_revenue: Dict[str, float]
+    sector_sales_count: Dict[str, int]
+    top_sectors_by_sales: List[SectorDetails]
+    region_revenue: Dict[str, float]
+    top_products_by_region: Dict[str, List[TopProduct]]
+    most_revenue_product: ProductRevenue
+    least_revenue_product: ProductRevenue
+    most_negotiated_product: NegotiatedProduct
+    average_price_by_product: Dict[str, float]
+
+class ProductDetailsResponse(BaseModel):
+    product_name: str
+    total_revenue: float
+    total_sold: int
+    average_sales_price: float
+    max_sales_price: float
+    min_sales_price: float
+    average_time_to_sell: float
+    top_seller_stats: Optional[TopStats]
+    top_sector_stats: Optional[TopStats]
+    monthly_stats: Dict[str, MonthlyStats]
+
+class SalesAgentsPerformanceResponse(BaseModel):
+    sales_agents_performance: Dict[str, SalesAgentPerformance]
+    ranking: List[Dict[str, Union[str, int]]]
+    managers_revenue: Dict[str, float]
+    client_revenue: Dict[str, float]
+
+class SalesAgentDetailsResponse(BaseModel):
+    sales_agent: str
+    total_sales: int
+    average_sales_price: float
+    top_products: List[TopAgentProduct]
+    top_sectors: List[TopSector]
+    total_revenue: float
+    opportunities: Dict[str, int]
+    average_time_to_sell: Optional[float] = None
+
+class ValueResponse(BaseModel):
+    products: List[str]
+    clients: List[str]
+    sectors: List[str]
+    sellers: List[str]
+    managers: List[str]
+    engage_months_years: List[str]
+    close_months_years: List[str]
+
+class AccountResponse(BaseModel):
+    client_revenues: Dict[str, float]
+    ranked_clients: List[RankedClient]
+    client_revenue_shares: Dict[str, AccountClientShare]
+    total_company_revenue: float
 
 app = FastAPI()
 
-@app.get("/products")
+
+@app.get("/products", response_model=ProductResponse)
 def products():
     total_revenue: Dict[int] = 0
     sold_products_count: Dict[int] = 0
@@ -138,10 +269,19 @@ def products():
     top_sectors_by_sales = sorted(
         sector_sales_count.items(), key=lambda x: x[1], reverse=True
     )[:3]
+    top_sectors_by_sales = [
+    {"sector": sector, "sales": sales} for sector, sales in top_sectors_by_sales
+]
 
     # Produits générant le plus et le moins de revenus
-    most_revenue_product = max(product_revenue.items(), key=lambda x: x[1], default=(None, 0))
-    least_revenue_product = min(product_revenue.items(), key=lambda x: x[1], default=(None, 0))
+    most_revenue_product = {
+        "name": max(product_revenue.items(), key=lambda x: x[1], default=(None, 0))[0],
+        "revenue": max(product_revenue.items(), key=lambda x: x[1], default=(None, 0))[1],
+    }
+    least_revenue_product = {
+        "name": min(product_revenue.items(), key=lambda x: x[1], default=(None, 0))[0],
+        "revenue": min(product_revenue.items(), key=lambda x: x[1], default=(None, 0))[1],
+    }
 
     # Produit le plus négocié
     most_negotiated_product = max(
@@ -199,7 +339,7 @@ def products():
     }
 
 
-@app.get("/products/{name_product}")
+@app.get("/products/{name_product}", response_model=ProductDetailsResponse)
 def product_details(name_product: str):
     # Préparer les données
     total_revenue: Dict[int] = 0
@@ -330,7 +470,8 @@ def product_details(name_product: str):
         "monthly_stats": monthly_stats,
     }
 
-@app.get("/sales_agents")
+
+@app.get("/sales_agents", response_model=SalesAgentsPerformanceResponse)
 def sales_agents_performance() -> Dict[str, Any]:
     performance = defaultdict(lambda: {
         "total_revenue": 0,
@@ -430,7 +571,8 @@ def sales_agents_performance() -> Dict[str, Any]:
         }
     }
 
-@app.get("/sales_agents/{name_agent}")
+
+@app.get("/sales_agents/{name_agent}", response_model=SalesAgentDetailsResponse)
 def sales_agent_details(name_agent: str):
     # Préparer les données
     agent_records = [
@@ -527,7 +669,8 @@ def sales_agent_details(name_agent: str):
         "average_time_to_sell": average_time_to_sell,
     }
 
-@app.get("/values")
+
+@app.get("/values", response_model=ValueResponse)
 def get_values():
     # Préparer les listes uniques
     products = set()
@@ -535,6 +678,8 @@ def get_values():
     sectors = set()
     sellers = set()
     managers = set()
+    engage_months_years = set()
+    close_months_years = set()
 
     for record in records:
         fields = record.get("fields", {})
@@ -544,7 +689,10 @@ def get_values():
         sector = fields.get("sector (from account)", [None])[0]
         seller = fields.get("sales_agent (from sales_agent)", [None])[0]
         manager = fields.get("manager (from sales_agent)", [None])[0]
+        engage_date = fields.get("engage_date", None)
+        close_date = fields.get("close_date", None)
 
+        # Ajouter les valeurs aux ensembles correspondants
         if product:
             products.add(product)
         if client:
@@ -556,6 +704,16 @@ def get_values():
         if manager:
             managers.add(manager)
 
+        # Extraire les mois et années pour engage_date
+        if engage_date:
+            engage_month_year = datetime.strptime(engage_date, "%Y-%m-%d").strftime("%Y-%m")
+            engage_months_years.add(engage_month_year)
+
+        # Extraire les mois et années pour close_date
+        if close_date:
+            close_month_year = datetime.strptime(close_date, "%Y-%m-%d").strftime("%Y-%m")
+            close_months_years.add(close_month_year)
+
     # Convertir les ensembles en listes pour la réponse JSON
     return {
         "products": list(products),
@@ -563,6 +721,8 @@ def get_values():
         "sectors": list(sectors),
         "sellers": list(sellers),
         "managers": list(managers),
+        "engage_months_years": sorted(list(engage_months_years)),  # Tri pour faciliter la lecture
+        "close_months_years": sorted(list(close_months_years)),    # Tri pour faciliter la lecture
     }
 
 
