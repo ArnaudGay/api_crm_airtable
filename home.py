@@ -150,7 +150,8 @@ def page_products():
                                 names="Client",
                                 values="Nombre de ventes",
                                 title=f"Clients pour le mois de {selected_month} {selected_year}",
-                                hole=0.6
+                                hole=0.4,
+                                color_discrete_sequence=px.colors.sequential.RdBu
                             )
                             st.plotly_chart(fig)
                         else:
@@ -165,7 +166,7 @@ def page_sales_agent():
 
     base_url = "http://127.0.0.1:8000"
 
-    # Fetch data from /sales_agents API
+    # Fetch data from /sales_agent API
     sales_agents_data = fetch_data(f"{base_url}/sales_agents")
 
     if sales_agents_data:
@@ -178,11 +179,14 @@ def page_sales_agent():
         })
         fig_revenue = px.bar(
             df_revenue,
-            x="Agent",
-            y="Revenu total",
+            x="Revenu total",
+            y="Agent",
+            orientation="h",
             title="Revenu total par agent",
             labels={"Agent": "Agent", "Revenu total": "Revenu (€)"},
-            text="Revenu total"
+            text="Revenu total",
+            color="Revenu total",
+            color_continuous_scale=px.colors.sequential.Plasma
         )
         st.plotly_chart(fig_revenue)
 
@@ -196,13 +200,13 @@ def page_sales_agent():
                 counts.append(count)
 
         df_sectors = pd.DataFrame({"Secteur": sectors, "Nombre de ventes": counts})
-        fig_sectors = px.bar(
+        fig_sectors = px.sunburst(
             df_sectors,
-            x="Secteur",
-            y="Nombre de ventes",
-            title="Nombre de ventes par secteur",
-            labels={"Secteur": "Secteur", "Nombre de ventes": "Nombre de ventes"},
-            text="Nombre de ventes"
+            path=["Secteur"],
+            values="Nombre de ventes",
+            title="Répartition des ventes par secteur",
+            color="Nombre de ventes",
+            color_continuous_scale=px.colors.sequential.Agsunset
         )
         st.plotly_chart(fig_sectors)
 
@@ -228,37 +232,41 @@ def page_sales_agent():
                     agent_details["opportunities"].items(),
                     columns=["Statut", "Nombre"]
                 )
-                fig_opportunities = px.pie(
+                fig_opportunities = px.funnel(
                     df_opportunities,
-                    names="Statut",
-                    values="Nombre",
-                    title="Répartition des opportunités"
+                    x="Nombre",
+                    y="Statut",
+                    title="Répartition des opportunités",
+                    color="Statut",
+                    color_discrete_sequence=px.colors.qualitative.Set1
                 )
                 st.plotly_chart(fig_opportunities)
 
                 # Graphique : Produits principaux
                 st.subheader("Produits principaux")
                 df_products = pd.DataFrame(agent_details["top_products"])
-                fig_products = px.bar(
+                fig_products = px.scatter(
                     df_products,
                     x="name",
                     y="average_price",
+                    size="average_price",
                     title="Produits principaux par prix moyen",
                     labels={"name": "Produit", "average_price": "Prix moyen (€)"},
-                    text="average_price"
+                    color="average_price",
+                    color_continuous_scale=px.colors.sequential.Viridis
                 )
                 st.plotly_chart(fig_products)
 
                 # Graphique : Secteurs principaux
                 st.subheader("Secteurs principaux")
                 df_sectors = pd.DataFrame(agent_details["top_sectors"])
-                fig_top_sectors = px.bar(
+                fig_top_sectors = px.treemap(
                     df_sectors,
-                    x="name",
-                    y="average_price",
+                    path=["name"],
+                    values="average_price",
                     title="Secteurs principaux par prix moyen",
-                    labels={"name": "Secteur", "average_price": "Prix moyen (€)"},
-                    text="average_price"
+                    color="average_price",
+                    color_continuous_scale=px.colors.sequential.Blues
                 )
                 st.plotly_chart(fig_top_sectors)
 
