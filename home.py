@@ -40,9 +40,10 @@ def page_products():
     if product_data:
         # Display metrics
         col1, col2, col3 = st.columns(3)
-        col1.metric("Revenu total", f"{product_data['total_revenue']} €")
-        col2.metric("Produits vendus", product_data['sold_products_count'])
-        col3.metric("Prix de vente moyen", f"{round(product_data['average_sales_price'], 2)} €")
+        col1.metric("Revenu total", f"{product_data['total_revenue']:,}".replace(',', ' ') + " €")
+        col2.metric("Produits vendus", f"{product_data['sold_products_count']:,}".replace(',', ' '))
+        col3.metric("Prix de vente moyen", f"{round(product_data['average_sales_price'], 2):,.2f}".replace(',', ' ') + " €")
+
 
 
         # Altair: Revenus par secteur
@@ -56,13 +57,14 @@ def page_products():
                 alt.Chart(df_sector_revenue)
                 .mark_bar()
                 .encode(
-                    x=alt.X("Secteur", sort=None),
+                    x=alt.X("Secteur", sort="ascending"),  # Tri des secteurs par ordre alphabétique
                     y="Revenus",
                     color="Secteur"
                 )
                 .properties(title="Revenus par secteur")
             )
             st.altair_chart(chart, use_container_width=True)
+
 
     # Les produits les plus vendus par secteur
     st.subheader("Produits les plus vendus par secteur")
@@ -103,9 +105,10 @@ def page_products():
             # Display metrics
             st.write(f"**Produit : {product_detail['product_name']}**")
             col1, col2, col3 = st.columns(3)
-            col1.metric("Revenu total", f"{product_detail['total_revenue']} €")
-            col2.metric("Ventes totales", product_detail['total_sold'])
-            col3.metric("Prix moyen", f"{round(product_detail['average_sales_price'], 2)} €")
+            col1.metric("Revenu total", f"{product_detail['total_revenue']:,}".replace(',', ' ') + " €")
+            col2.metric("Ventes totales", f"{product_detail['total_sold']:,}".replace(',', ' '))
+            col3.metric("Prix moyen", f"{round(product_detail['average_sales_price'], 2):,.2f}".replace(',', ' ') + " €")
+
 
             # Altair: Statistiques mensuelles et Top clients côte à côte
             st.subheader("Statistiques mensuelles et Top clients")
@@ -173,7 +176,7 @@ def page_products():
 # Page Commerciaux
 def page_sales_agent():
     st.title("Commerciaux")
-    st.write("Analyse des performances des agents commerciaux.")
+    st.write("Analyse des performances des commerciaux.")
 
     base_url = "http://127.0.0.1:8000"
 
@@ -182,24 +185,29 @@ def page_sales_agent():
 
     if sales_agents_data:
         # Graphique : Revenus totaux par agent
-        st.subheader("Revenus totaux par agent")
+        st.subheader("Revenus totaux par commerciaux")
         performance_data = sales_agents_data["sales_agents_performance"]
         df_revenue = pd.DataFrame({
             "Agent": performance_data.keys(),
             "Revenu total": [data["total_revenue"] for data in performance_data.values()]
         })
+
+        # Trier les données par "Revenu total" dans l'ordre croissant
+        df_revenue = df_revenue.sort_values(by="Revenu total", ascending=False)
+
         fig_revenue = px.bar(
             df_revenue,
             x="Revenu total",
-            y="Agent",
+            y="Commerciaux",
             orientation="h",
-            title="Revenu total par agent",
-            labels={"Agent": "Agent", "Revenu total": "Revenu (€)"},
+            title="Revenu total par commerciaux",
+            labels={"Agent": "Commerciaux", "Revenu total": "Revenu (€)"},
             text="Revenu total",
             color="Revenu total",
             color_continuous_scale=px.colors.sequential.Plasma
         )
         st.plotly_chart(fig_revenue)
+
 
         # Graphique : Nombre de ventes par secteur
         st.subheader("Nombre de ventes par secteur")
@@ -222,20 +230,21 @@ def page_sales_agent():
         st.plotly_chart(fig_sectors)
 
         # Sélecteur pour afficher les détails d'un agent spécifique
-        st.subheader("Détails par agent")
-        selected_agent = st.selectbox("Choisissez un agent", sorted(performance_data.keys()))
+        st.subheader("Détails par commericaux")
+        selected_agent = st.selectbox("Choisissez un commercial", sorted(performance_data.keys()))
 
         if selected_agent:
             agent_details = fetch_data(f"{base_url}/sales_agents/{selected_agent}")
 
             if agent_details:
-                st.write(f"**Agent : {agent_details['sales_agent']}**")
+                st.write(f"**Commercial : {agent_details['sales_agent']}**")
 
                 # Afficher les métriques
                 col1, col2, col3 = st.columns(3)
-                col1.metric("Total des ventes", agent_details["total_sales"])
-                col2.metric("Prix moyen", f"{round(agent_details['average_sales_price'], 2)} €")
-                col3.metric("Revenu total", f"{agent_details['total_revenue']} €")
+                col1.metric("Total des ventes", f"{agent_details['total_sales']:,}".replace(',', ' '))
+                col2.metric("Prix moyen", f"{round(agent_details['average_sales_price'], 2):,.2f}".replace(',', ' ') + " €")
+                col3.metric("Revenu total", f"{agent_details['total_revenue']:,}".replace(',', ' ') + " €")
+
 
                 # Graphique : Opportunités
                 st.subheader("Opportunités")
@@ -256,18 +265,23 @@ def page_sales_agent():
                 # Graphique : Produits principaux
                 st.subheader("Produits principaux")
                 df_products = pd.DataFrame(agent_details["top_products"])
+
+                # Trier les données par "average_price" dans l'ordre croissant
+                df_products = df_products.sort_values(by="average_price", ascending=True)
+
                 fig_products = px.scatter(
                     df_products,
                     x="name",
                     y="average_price",
                     size="average_price",
-                    size_max= 50,
+                    size_max=50,  # Taille maximale des points
                     title="Produits principaux par prix moyen",
                     labels={"name": "Produit", "average_price": "Prix moyen (€)"},
                     color="average_price",
                     color_continuous_scale=px.colors.sequential.Viridis
                 )
                 st.plotly_chart(fig_products)
+
 
                 # Graphique : Secteurs principaux
                 st.subheader("Secteurs principaux")
