@@ -2,6 +2,8 @@ from typing import Dict, List, Any, Optional, Union
 from fastapi import FastAPI
 from collections import defaultdict
 import requests
+import os
+import json
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -20,16 +22,45 @@ headers = {
     "Authorization": f"Bearer {API_KEY}"
 }
 
-# GET request to retrieve records
-response = requests.get(url, headers=headers)
+# Function to fetch and cache data from Airtable
+def fetch_and_cache_data():
+    cache_file = "cache_api.json"
 
-# Check response status
-if response.status_code == 200:
-    data = response.json()
-    records = data.get("records", [])
-else:
-    print(f"Failed to retrieve records: {response.status_code}")
-    print(response.json())
+    # Check if cache file exists
+    if os.path.exists(cache_file):
+        with open(cache_file, "r") as file:
+            return json.load(file)
+
+    # If cache does not exist, fetch data from Airtable API
+    all_records = []
+    offset = None
+
+    while True:
+        params = {"offset": offset} if offset else {}
+        response = requests.get(url, headers=headers, params=params)
+
+        if response.status_code == 200:
+            data = response.json()
+            records = data.get("records", [])
+            all_records.extend(records)
+            offset = data.get("offset")
+
+            if not offset:  # No more pages
+                break
+        else:
+            print(f"Failed to retrieve records: {response.status_code}")
+            print(response.json())
+            break
+
+    # Cache the data in a JSON file
+    with open(cache_file, "w") as file:
+        json.dump(all_records, file)
+
+    return all_records
+
+# Load records
+records = fetch_and_cache_data()
+
 
 # Init docs
 

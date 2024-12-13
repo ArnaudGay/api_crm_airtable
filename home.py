@@ -4,6 +4,10 @@ import requests
 import altair as alt
 import plotly.express as px
 from datetime import datetime
+import locale
+
+
+locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
 
 st.set_page_config(layout="wide")
 
@@ -38,7 +42,8 @@ def page_products():
         col1, col2, col3 = st.columns(3)
         col1.metric("Revenu total", f"{product_data['total_revenue']} €")
         col2.metric("Produits vendus", product_data['sold_products_count'])
-        col3.metric("Prix de vente moyen", f"{product_data['average_sales_price']} €")
+        col3.metric("Prix de vente moyen", f"{round(product_data['average_sales_price'], 2)} €")
+
 
         # Altair: Revenus par secteur
         st.subheader("Revenus par secteur")
@@ -63,7 +68,7 @@ def page_products():
     st.subheader("Produits les plus vendus par secteur")
 
     # Ajout d'une sélection dynamique pour choisir le secteur
-    selected_sector = st.selectbox("Choisissez un secteur", values_data['sectors'])
+    selected_sector = st.selectbox("Choisissez un secteur", sorted(values_data['sectors']))
 
     top_products_by_sector = product_data['top_products_by_sector']
     # Affichage du graphique pour le secteur sélectionné
@@ -89,7 +94,7 @@ def page_products():
 
     # Fetch data for a specific product
     st.header("Détails par produit")
-    product_name = st.selectbox("Entrez le nom d'un produit :", values_data['products'])
+    product_name = st.selectbox("Entrez le nom d'un produit :", sorted(values_data['products']))
 
     if product_name:
         product_detail = fetch_data(f"{base_url}/products/{product_name}")
@@ -100,7 +105,7 @@ def page_products():
             col1, col2, col3 = st.columns(3)
             col1.metric("Revenu total", f"{product_detail['total_revenue']} €")
             col2.metric("Ventes totales", product_detail['total_sold'])
-            col3.metric("Prix moyen", f"{product_detail['average_sales_price']} €")
+            col3.metric("Prix moyen", f"{round(product_detail['average_sales_price'], 2)} €")
 
             # Altair: Statistiques mensuelles et Top clients côte à côte
             st.subheader("Statistiques mensuelles et Top clients")
@@ -129,18 +134,24 @@ def page_products():
 
                 # Sélecteurs et graphique des Top clients
                 with col2:
-                    available_months = sorted({datetime.strptime(month, "%Y-%m").strftime("%B") for month in monthly_stats.keys()})
-                    available_years = sorted({month.split("-")[0] for month in monthly_stats.keys()})
+                    # Trier les mois et les années dans l'ordre d'arrivée
+                    sorted_dates = sorted(monthly_stats.keys(), key=lambda x: datetime.strptime(x, "%Y-%m"))
+                    available_months = [datetime.strptime(date, "%Y-%m").strftime("%B").capitalize() for date in sorted_dates]
+                    available_years = sorted({date.split("-")[0] for date in sorted_dates})
 
                     col1, col2 = st.columns([1, 1])
                     selected_year = col1.selectbox("Choisissez une année", available_years)
-                    selected_month = col2.selectbox("Choisissez un mois", available_months)
+                    filtered_months = [
+                        datetime.strptime(date, "%Y-%m").strftime("%B").capitalize()
+                        for date in sorted_dates
+                        if date.startswith(selected_year)
+                    ]
+                    selected_month = col2.selectbox("Choisissez un mois", filtered_months)
 
                     selected_date = f"{selected_year}-{datetime.strptime(selected_month, '%B').month:02d}"
 
                     if selected_date in monthly_stats:
                         stats = monthly_stats[selected_date]
-                        st.write(f"**Date : {selected_date}**")
                         df_clients = pd.DataFrame(
                             stats["clients"].items(), columns=["Client", "Nombre de ventes"]
                         )
@@ -159,9 +170,9 @@ def page_products():
                     else:
                         st.write("Aucune donnée pour la période sélectionnée.")
 
-# Page Sales Agent
+# Page Commerciaux
 def page_sales_agent():
-    st.title("Sales Agent")
+    st.title("Commerciaux")
     st.write("Analyse des performances des agents commerciaux.")
 
     base_url = "http://127.0.0.1:8000"
@@ -212,7 +223,7 @@ def page_sales_agent():
 
         # Sélecteur pour afficher les détails d'un agent spécifique
         st.subheader("Détails par agent")
-        selected_agent = st.selectbox("Choisissez un agent", performance_data.keys())
+        selected_agent = st.selectbox("Choisissez un agent", sorted(performance_data.keys()))
 
         if selected_agent:
             agent_details = fetch_data(f"{base_url}/sales_agents/{selected_agent}")
@@ -223,7 +234,7 @@ def page_sales_agent():
                 # Afficher les métriques
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Total des ventes", agent_details["total_sales"])
-                col2.metric("Prix moyen", f"{agent_details['average_sales_price']} €")
+                col2.metric("Prix moyen", f"{round(agent_details['average_sales_price'], 2)} €")
                 col3.metric("Revenu total", f"{agent_details['total_revenue']} €")
 
                 # Graphique : Opportunités
@@ -250,6 +261,7 @@ def page_sales_agent():
                     x="name",
                     y="average_price",
                     size="average_price",
+                    size_max= 50,
                     title="Produits principaux par prix moyen",
                     labels={"name": "Produit", "average_price": "Prix moyen (€)"},
                     color="average_price",
@@ -272,12 +284,12 @@ def page_sales_agent():
 
 # Menu de navigation
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Aller à :", ("Accueil", "Products", "Sales Agent"))
+page = st.sidebar.radio("Aller à :", ("Accueil", "Produits", "Commerciaux"))
 
 # Quel page afficher
 if page == "Accueil":
     page_accueil()
-elif page == "Products":
+elif page == "Produits":
     page_products()
-elif page == "Sales Agent":
+elif page == "Commerciaux":
     page_sales_agent()
