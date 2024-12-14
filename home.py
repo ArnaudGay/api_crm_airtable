@@ -25,7 +25,6 @@ def page_accueil():
     st.title("Accueil")
     st.write("Bienvenue sur votre dashboard.")
     st.image("./ressources/logo.png", caption="HeticElectronics")
-    st.balloons()
 
 # Page Products
 def page_products():
@@ -198,7 +197,7 @@ def page_sales_agent():
         fig_revenue = px.bar(
             df_revenue,
             x="Revenu total",
-            y="Commerciaux",
+            y="Agent",
             orientation="h",
             title="Revenu total par commerciaux",
             labels={"Agent": "Commerciaux", "Revenu total": "Revenu (€)"},
